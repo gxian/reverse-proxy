@@ -3,8 +3,17 @@ package main
 import (
 	"net/http"
 	"net/http/httputil"
+	"os"
+	"regexp"
 
+	"github.com/gin-contrib/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+)
+
+var (
+	rxURL = regexp.MustCompile(`^/regexp\d*`)
 )
 
 // ReverseProxy ...
@@ -25,8 +34,34 @@ func ReverseProxy() gin.HandlerFunc {
 }
 
 func main() {
+	// log
+
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	if gin.IsDebugging() {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	}
+
+	log.Logger = log.Output(
+		zerolog.ConsoleWriter{
+			Out:     os.Stderr,
+			NoColor: false,
+		},
+	)
+
+	// test main
 	r := gin.New()
-	r.Use(gin.Logger())
+	r.Use(logger.SetLogger())
+	// Custom logger
+	subLog := zerolog.New(os.Stdout).With().
+		Str("foo", "bar").
+		Logger()
+
+	r.Use(logger.SetLogger(logger.Config{
+		Logger:         &subLog,
+		UTC:            true,
+		SkipPath:       []string{"/skip"},
+		SkipPathRegexp: rxURL,
+	}))
 	r.Use(gin.Recovery())
 	r.Any("/", ReverseProxy())
 	r.Run()
